@@ -1,71 +1,69 @@
 import numpy as np
 
-def simpsonregel(h,hs,ns,a,b):
+def simpsonregel(h,hs,ns,a,b,mode=0):
     """
-    Berechnet die Simpsonregel-Näherung für zwei Funktionen h und hs auf dem Intervall [a,b] mit ns Teilintervallen.
+    Berechnet die Simpsonregel-Näherung für h oder hs auf dem Intervall [a,b] mit ns Teilintervallen.
 
     Parameter:
-        h (callable): Erste Funktion h(x)
-        hs (callable): Zweite Funktion hs(x)
+        h (callable): Funktion h(x)
+        hs (callable): Funktion hs(x)
         ns (int): Anzahl der Teilintervalle der Zerlegung (muss gerade sein)
         a (float): Linke Intervallgrenze
         b (float): Rechte Intervallgrenze
+        mode (int): 0 nutzt h, 1 nutzt hs
 
     Rückgabe:
-        tuple: (S_h, S_hs)
-            S_h (float): Simpsonregel-Näherung für h auf [a,b]
-            S_hs (float): Simpsonregel-Näherung für hs auf [a,b]
+        float: Simpsonregel-Näherungswert der gewählten Funktion auf [a,b]
     """
     #Feinheit der Zerlegung
     dx = (b - a) / ns
     #Stützstellen
-    xs=np.linspace(a,b,ns+1)
-    # Berechnung der Simpson-Summen
-    ys1=h(xs)
-    ys2=hs(xs)
-    ss1,ss2 = ys1[0]+ys1[-1],ys2[0]+ys2[-1]
+    xs = np.linspace(a, b, ns + 1)
+    # Berechnung der Simpson-Summe (nur eine Funktion, je nach mode)
+    if mode == 0:
+        ys = h(xs)
+    elif mode == 1:
+        ys = hs(xs)
+    #Berechnung Simpson
+    ss = ys[0] + ys[-1]
     for i in range(1, ns):
         if i % 2 == 0:  # summe für alle geraden i
-            ss1+=2*ys1[i]
-            ss2+=2*ys2[i]
+            ss += 2 * ys[i]
         elif i % 2 == 1:  # summe für alle ungeraden i
-            ss1 += 4 * ys1[i]
-            ss2 += 4 * ys2[i]
-    return  ss1*(dx/3), ss2*(dx/3)
+            ss += 4 * ys[i]
+    #Rückgabe
+    return ss * (dx / 3)
+
 
 from core.analytisch import stammint
 
-def simpsonerr(h,hs,err,a,b,k=2):
+def simpsonerr(h,hs,err,a,b,k=2,mode=0):
     """
-    Ermittelt die kleinste gerade Teilintervallzahl (in Schritten von k), sodass die Simpsonregel den Fehler err gegenüber dem Referenzintegral unterschreitet.
+    Ermittelt eine gerade Teilintervallzahl ns (in Schritten von k), sodass die Simpsonregel den Fehler err gegenüber dem Referenzintegral unterschreitet.
 
     Parameter:
-        h (callable): Erste Funktion h(x)
-        hs (callable): Zweite Funktion hs(x)
+        h (callable): Funktion h(x)
+        hs (callable): Funktion hs(x)
         err (float): Fehlertoleranz für |I_ref - S|
         a (float): Linke Intervallgrenze
         b (float): Rechte Intervallgrenze
         k (int): Schrittweite, mit der ns erhöht wird (standardmäßig 2, damit ns gerade bleibt)
+        mode (int): 0 nutzt h als Zielfunktion, 1 nutzt hs als Zielfunktion
 
     Rückgabe:
-        tuple: (ns1, ns2, ss1, ss2)
-            ns1 (int): Teilintervallzahl für h (gerade), bei der der Fehler <= err ist
-            ns2 (int): Teilintervallzahl für hs (gerade), bei der der Fehler <= err ist
-            ss1 (float): Simpsonregel-Wert für h bei ns1
-            ss2 (float): Simpsonregel-Wert für hs bei ns2
+        tuple: (ns, ss)
+            ns (int): Teilintervallzahl (gerade), bei der der Fehler <= err ist
+            ss (float): Simpsonregel-Wert der Zielfunktion bei ns
     """
     # Referenzintegrale
-    A1, A2, _, _ = stammint(a, b, h, hs)
+    Ai,_ = stammint(a, b, h, hs,mode)
     # Start: ns = 0 (noch keine Teilintervalle), erste Rechnung bei ns = 2
-    ss1, ns1 = 0.0,0# Simpson-Näherung und ns1 für h
-    ss2, ns2 = 0.0,0# Simpson-Näherung und ns2 für hs
-    # ns1 erhöhen, bis Simpsonregel für h nah genug am Referenzwert A1 ist
-    while abs(A1-ss1)>err:
-        ns1+=k #n muss immer gerade sein
-        ss1 = simpsonregel(h,hs,ns1,a,b)[0]
-    # ns2 erhöhen, bis Simpsonregel für hs nah genug am Referenzwert A2 ist
-    while abs(A2-ss2)>err:
-        ns2 += k #n muss immer gerade sein
-        ss2 = simpsonregel(h,hs,ns2,a,b)[1]
+    ss, ns = 0.0, 0  # Simpson-Näherung und ns
+    # ns erhöhen, bis Simpsonregel nah genug am Referenzwert Ai ist
+    while True:
+        ns += k  # n muss immer gerade sein
+        ss = simpsonregel(h, hs, ns, a, b, mode)
+        #Stoppen wenn err erreicht
+        if abs(Ai-ss) < err: break
     #Rückgabe
-    return ns1,ns2,ss1,ss2
+    return ns, ss

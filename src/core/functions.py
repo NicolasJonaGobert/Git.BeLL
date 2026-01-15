@@ -16,18 +16,19 @@ def betragsfunk(f, g):
     # gibt eine Funktion h(x) zurück, die |f(x) - g(x)| berechnet
     def h(x):
         return np.abs(f(x) - g(x))
+    #Speicherung Funktion
     return h
 
 def spline(pl, i):
     """
-    Baut einen CubicSpline aus der Punktliste pl[i].
+    Baut einen CubicSpline aus einer Punktliste pl[i].
 
     Parameter:
         pl (list): Liste von Punktlisten (x_liste, y_liste), z.B. [(x1,y1), (x2,y2), ...]
-        i (int): Index des gewünschten Splines in pl (0 für ersten, 1 für zweiten, ...)
+        i (int): Index der gewünschten Punktliste in pl
 
     Rückgabe:
-        CubicSpline: Kubischer Spline (natural), der die Stützpunkte interpoliert
+        CubicSpline: Natural CubicSpline, der die Stützpunkte interpoliert
     """
     """
     Baut einen CubicSpline aus der Punktliste pl[index].
@@ -67,33 +68,44 @@ def splinebetrag(pl):
     #Erstellung der Betragsfunktion
     def h(x):
         return np.abs(cs1(x) - cs2(x))
+    # Speicherung
     return h
 
-def randomsmonte(a,b,N,h,hs):
+def randomsmonte(a,b,N,h,hs,kma,f_raw,mode=0):
     """
-    Erzeugt Zufallspunkte für ein Monte Carlo Verfahren und schätzt die globalen Maxima der Funktionen h und hs im Intervall [a,b].
+    Erzeugt Zufallspunkte für ein geometrisches Monte Carlo Verfahren und schätzt ein ymax im Intervall [a,b] durch Abtastung.
 
     Parameter:
         a (float): Linke Intervallgrenze
         b (float): Rechte Intervallgrenze
         N (int): Anzahl der Zufallspunkte
-        h (callable): Erste Funktion h(x)
-        hs (callable): Zweite Funktion hs(x)
+        h (callable): Funktion h(x), wird je nach mode einmal ausgewertet (z.B. für Funktionsaufruf-Zählung)
+        hs (callable): Funktion hs(x), wird je nach mode einmal ausgewertet (z.B. für Funktionsaufruf-Zählung)
+        kma (int): Anzahl der Abtastpunkte zur Approximation des Maximums
+        f_raw (callable): Funktion, die für die Maximumsuche abgetastet wird (nicht gezählt)
+        mode (int): 0 nutzt h für den Zählaufruf, 1 nutzt hs für den Zählaufruf
 
     Rückgabe:
-        tuple: (xz, yz1, yz2, y1max, y2max)
+        tuple: (xz, yz, ymax)
             xz (np.ndarray): Zufällige x-Werte in [a,b] (Länge N)
-            yz1 (np.ndarray): Zufällige y-Werte in [0, y1max] für h (Länge N)
-            yz2 (np.ndarray): Zufällige y-Werte in [0, y2max] für hs (Länge N)
-            y1max (float): Approximiertes Maximum von h auf [a,b] (per Abtastung)
-            y2max (float): Approximiertes Maximum von hs auf [a,b] (per Abtastung)
+            yz (np.ndarray): Zufällige y-Werte in [0, ymax] (Länge N)
+            ymax (float): Approximiertes Maximum der abgetasteten Funktion f_raw auf [a,b]
     """
+    #Funktion die Zufallspunkte erstellt
     #Annäherung der globalen Maxima von h und hs
-    xapr=np.linspace(a,b,5000)#x-Werte um Funktion abzutasten
-    y1max=float(np.max(h(xapr)))#Maximum h
-    y2max=float(np.max(hs(xapr)))#Maximum h
+    xapr=np.linspace(a,b,kma)#x-Werte um Funktion abzutasten
+    fr = f_raw#Funktion die nicht gezählt wird (Zähler durch fr +1 pro durchlauf)
+    #Berechnung je nach Mode
+    if mode==0:
+        ymax=float(np.max(fr(xapr)))#Maximum h
+        xm=(a+b)/2#x-Wert für Zählung
+        _=h(xm)#Funktionsaufruf
+    elif mode==1:
+        ymax=float(np.max(fr(xapr)))#Maximum h
+        xm=(a+b)/2
+        _=hs(xm)
     #Punkteerstellung
-    xz = np.random.uniform(a, b, N)  # Zufällige x-Werte für beide h und hs
-    yz1 = np.random.uniform(0,y1max, N) # Zufällige y-Werte für h
-    yz2 = np.random.uniform(0,y2max, N) # Zufällige y-Werte für hs
-    return xz, yz1, yz2,y1max,y2max
+    xz = np.random.uniform(a, b, N)  # Zufällige x-Werte
+    yz = np.random.uniform(0,ymax, N) # Zufällige y-Werte für f
+    #Speicherung
+    return xz, yz,ymax
