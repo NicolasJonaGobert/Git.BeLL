@@ -1,9 +1,14 @@
 import numpy as np
 from core.functions import randomsmonte
+from utils.validation import _eval_y
 
-def geomonte(N, a, b, h, hs,kma, mode=0):
+def geomonte(N, a, b, h, hs, kma, f_raw, mode=0, eps=1e-12):
     """
-    Führt ein geometrisches Monte Carlo Verfahren für h oder hs auf [a,b] aus und gibt Näherung, Trefferzahl und Zufallspunkte zurück.
+    Führt eine geometrische Monte-Carlo-Integration (Treffer-Methode) auf [a,b] für h oder hs aus.
+
+    Es werden Zufallspunkte (xz, yz) in einem Rechteck der Höhe ymax erzeugt.
+    Anschließend wird gezählt, wie viele Punkte unter der Kurve liegen (Treffer Zi).
+    Die Funktion wird robust über _eval_y ausgewertet (z.B. für numerische Stabilität).
 
     Parameter:
         N (int): Anzahl der Zufallspunkte
@@ -11,69 +16,136 @@ def geomonte(N, a, b, h, hs,kma, mode=0):
         b (float): Rechte Intervallgrenze
         h (callable): Funktion h(x)
         hs (callable): Funktion hs(x)
-        kma (int): Parameter zur Maximum-Approximation innerhalb randomsmonte
+        kma (int): Anzahl der Abtastpunkte zur ymax-Approximation in randomsmonte
+        f_raw (callable): Ungezählte/robuste Rohfunktion für die ymax-Bestimmung in randomsmonte
         mode (int): 0 nutzt h, 1 nutzt hs
+        eps (float): Toleranz/Schutzparameter, wird an _eval_y weitergegeben
 
     Rückgabe:
-        tuple: (mc, Zi, xz, yz)
-            mc (float): Monte Carlo Näherungswert des Integrals der gewählten Funktion
-            Zi (int): Anzahl der Trefferpunkte unter der Kurve
-            xz (np.ndarray): Zufällige x-Werte in [a,b] (Länge N)
-            yz (np.ndarray): Zufällige y-Werte in [0, ymax] (Länge N)
+        tuple: (I, Zi, xz, yz)
+            I (float): Monte-Carlo-Näherung des Integrals
+            Zi (int): Anzahl der Trefferpunkte (unter der Kurve)
+            xz (np.ndarray): Zufällige x-Koordinaten
+            yz (np.ndarray): Zufällige y-Koordinaten
     """
-    # Zufallsgenerierung der Punkte über externe Funktion (unverändert)
-    xz, yz,ymax=randomsmonte(a,b,N,h,hs,kma,mode)
-    # Berechnung Rechteckfläche und Zählung der Treffer für h
-    if mode == 0:
-        A = (b - a) * ymax #Rechteck
-        yh = h(xz) #y-Werte
-        Zi = 0 #Anzahl Treffer
-        #Überprüfen für jedes N
-        for i in range(N):
-            if yh[i] >= yz[i]:
-                Zi += 1
-        return A * (Zi / N),Zi,xz,yz
-    # Berechnung Rechteckfläche und Zählung der Treffer für hs (Prinzip wie bei h)
-    elif mode == 1:
-        A = (b - a) * ymax
-        yhs = hs(xz)
-        Zi = 0
-        for i in range(N):
-            if yhs[i] >= yz[i]:
-                Zi += 1
-        return A * (Zi / N),Zi,xz,yz
+    # Zufallspunkte + ymax
+    xz, yz, ymax = randomsmonte(a, b, N, h, hs, kma, f_raw, mode)
+    # auf Arrays ziehen (der Rest wird über _eval_y abgefangen)
+    xz = np.asarray(xz, dtype=float).ravel()
+    yz = np.asarray(yz, dtype=float).ravel()
+    ymax = float(np.asarray(ymax).ravel()[0])
+    # Rechteckfläche
+    A = (b - a) * ymax
+    # passende Kurve wählen und robust auswerten
+    f = h if mode == 0 else hs
+    ycurve = _eval_y(f, xz, eps)
+    # Treffer (vektorisiert)
+    Zi = int(np.sum(ycurve >= yz))
+    #Speicherung
+    return A * (Zi / N), Zi, xz, yz
 
-
-from core.analytisch import stammint
-
-def errmonte(err, a, b, h, hs,kma, k=10, mode=0):
+def errmonte(err, a, b, h, hs, kma, f_raw, Ai, k=10, mode=0, eps=1e-12):
     """
-    Ermittelt eine Stichprobengröße N (in Schritten von k), sodass die Monte Carlo Näherung den Fehler err gegenüber dem Referenzintegral unterschreitet.
+    Führt geomonte iterativ aus und erhöht N (als Potenz von 2), bis der Fehler err gegenüber dem Referenzwert Ai unterschritten wird.
 
     Parameter:
-        err (float): Fehlertoleranz für |I_ref - MC|
+        err (float): Fehlertoleranz für |MonteCarlo - Ai|
         a (float): Linke Intervallgrenze
         b (float): Rechte Intervallgrenze
         h (callable): Funktion h(x)
         hs (callable): Funktion hs(x)
-        kma (int): Parameter zur Maximum-Approximation innerhalb randomsmonte
-        k (int): Schrittweite, mit der N erhöht wird
-        mode (int): 0 nutzt h als Zielfunktion, 1 nutzt hs als Zielfunktion
+        kma (int): Anzahl der Abtastpunkte zur ymax-Approximation in randomsmonte
+        f_raw (callable): Ungezählte/robuste Rohfunktion für die ymax-Bestimmung in randomsmonte
+        Ai (float): Referenzintegralwert der Zielfunktion
+        k (int): Schrittweite für den Exponenten q (N = 2**q)
+        mode (int): 0 nutzt h, 1 nutzt hs
+        eps (float): Toleranz/Schutzparameter, wird an _eval_y weitergegeben
 
     Rückgabe:
-        tuple: (N, mc)
-            N (int): Stichprobengröße, bei der der Fehler <= err ist
-            mc (float): Monte Carlo Näherungswert der Zielfunktion bei N
+        tuple: (N, mc, Zi)
+            N (int): Verwendete Stichprobengröße (Potenz von 2)
+            mc (float): Monte-Carlo-Näherung bei diesem N
+            Zi (int): Trefferzahl aus dem letzten Lauf
     """
-    # Referenzintegral
-    Ai,_ = stammint(a, b, h, hs,mode)
+    #Funktion die MC berechnet bis err erreicht
     # Startwerte
-    mc, N = 0.0, 0
+    mc, N, q = 0.0, 1, 1
     # Monte-Carlo konvergiert nicht monoton (Zufallsverfahren)
     while True:
-        N += k
-        mc,_,_,_ = geomonte(N, a, b, h, hs,kma, mode)
+        mc, Zi, _, _ = geomonte(N, a, b, h, hs, kma, f_raw, mode) #Berechnung Annäherung und Treffer
         if abs(mc - Ai) < err:
             break
+        else:
+            N = 2 ** q  # neues N berechnen
+            q += k
     # Rückgabe
-    return N, mc
+    return N, mc, Zi
+
+def mittel_monte(N, a, b, h, hs, kma, f_raw, wm, mode=0, eps=1e-12):
+    """
+    Berechnet den Mittelwert aus wm Monte-Carlo-Durchläufen (geomonte) mit festem N.
+
+    Parameter:
+        N (int): Anzahl der Zufallspunkte pro Monte-Carlo-Lauf
+        a (float): Linke Intervallgrenze
+        b (float): Rechte Intervallgrenze
+        h (callable): Funktion h(x)
+        hs (callable): Funktion hs(x)
+        kma (int): Anzahl der Abtastpunkte zur ymax-Approximation in randomsmonte
+        f_raw (callable): Ungezählte/robuste Rohfunktion für die ymax-Bestimmung in randomsmonte
+        wm (int): Anzahl der Wiederholungen (Runs), über die gemittelt wird
+        mode (int): 0 nutzt h, 1 nutzt hs
+        eps (float): Toleranz/Schutzparameter (wird hier nicht direkt genutzt, ist als Parameter vorhanden)
+
+    Rückgabe:
+        float: Mittelwert der Monte-Carlo-Schätzer über wm Läufe
+    """
+    #Berechnet Mittelwert aus wm monte Carlo Durchläufen
+    #Schätzer auf Null
+    Is=0
+    #wm Wiederholungen
+    for i in range(wm):
+        #Schätzer addieren
+        Is += geomonte(N, a, b, h, hs, kma, f_raw, mode)[0]
+    #Rückgabe Mittelwert
+    return Is/wm
+
+def err_mittel_monte(err, a, b, h, hs, kma, f_raw, wm, kmi, Ai, mode=0, eps=1e-12):
+    """
+    Erhöht N (als Potenz von 2), bis der Mittelwert aus wm Monte-Carlo-Läufen (mittel_monte)
+    den Fehler err gegenüber dem Referenzwert Ai unterschreitet.
+
+    Parameter:
+        err (float): Fehlertoleranz für |Mittelwert - Ai|
+        a (float): Linke Intervallgrenze
+        b (float): Rechte Intervallgrenze
+        h (callable): Funktion h(x)
+        hs (callable): Funktion hs(x)
+        kma (int): Anzahl der Abtastpunkte zur ymax-Approximation in randomsmonte
+        f_raw (callable): Ungezählte/robuste Rohfunktion für die ymax-Bestimmung in randomsmonte
+        wm (int): Anzahl der Wiederholungen für den Mittelwert-Schätzer
+        kmi (int): Schrittweite für den Exponenten q (N = 2**q)
+        Ai (float): Referenzintegralwert der Zielfunktion
+        mode (int): 0 nutzt h, 1 nutzt hs
+        eps (float): Toleranz/Schutzparameter (wird hier nicht direkt genutzt, ist als Parameter vorhanden)
+
+    Rückgabe:
+        tuple: (N, Am)
+            N (int): Verwendete Stichprobengröße (Potenz von 2)
+            Am (float): Mittelwert-Schätzer bei diesem N
+    """
+    #Berechnet mittel_monte bis err unterschritten
+    #N,q auf 1
+    N,q=1,1
+    #Beginn der Schleife
+    while True:
+        #Berechnung des Mittelwerts aus wm Durchläufen
+        Am=mittel_monte(N, a, b, h, hs, kma, f_raw,wm, mode)
+        #Stopp wenn err unterschritten
+        if abs(Am - Ai) < err:
+            break
+        else:
+            N = 2 ** q
+            q+=kmi
+    #Rückgabe
+    return N,Am

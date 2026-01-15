@@ -1,61 +1,59 @@
-import matplotlib.pyplot as plt
 import numpy as np
+from utils.validation import _eval_y
 
 def plot_funktionen_fläche(ax, a, b, f1, f2):
     """
-    Plottet zwei Funktionen f1 und f2 auf [a,b] in ein gegebenes Axes-Objekt und markiert die Fläche zwischen ihnen.
+    Plottet zwei Funktionen auf [a,b] und markiert die Fläche zwischen ihnen.
 
     Parameter:
-        ax (matplotlib.axes.Axes): Achse, in die geplottet wird
+        ax (matplotlib.axes.Axes): Ziel-Achse, in die gezeichnet wird
         a (float): Linke Intervallgrenze
         b (float): Rechte Intervallgrenze
-        f1 (callable): Erste Funktion f1(x)
-        f2 (callable): Zweite Funktion f2(x)
+        f1 (callable): Erste Funktion f1(x), auswertbar für Skalar oder Array
+        f2 (callable): Zweite Funktion f2(x), auswertbar für Skalar oder Array
 
     Rückgabe:
-        keine
+        None
     """
-    # x-Werte für Plot
     xp = np.linspace(a, b, 10000)
-    # Funktionswerte einmal berechnen
-    y1 = f1(xp)
-    y2 = f2(xp)
-    # Plotten der Funktionen
-    ax.plot(xp, y1, color="blue", label="$f_1(x)$")   # Plot f1
-    ax.plot(xp, y2, color="red", label="$f_2(x)$")    # Plot f2
-    # Fläche zwischen den Funktionen
+    y1 = _eval_y(f1, xp)
+    y2 = _eval_y(f2, xp)
+    #Ausgabe Plot
+    ax.plot(xp, y1, color="blue", label="$f_1(x)$")
+    ax.plot(xp, y2, color="red", label="$f_2(x)$")
     ax.fill_between(
         xp, y1, y2,
         alpha=0.25,
         color="green",
         label="Fläche zwischen $f_1(x)$ und $f_2(x)$"
     )
-    # Bearbeiten Koordinatensystem
     ax.set_xlabel("x")
     ax.set_ylabel("y")
+    ax.grid(True)
     ax.legend()
+
 
 
 def plot_betrag(ax, a, b, f):
     """
-    Plottet eine Funktion f auf [a,b] in ein gegebenes Axes-Objekt und markiert die Fläche unter der Kurve.
+    Plottet eine Funktion f auf [a,b] und schattiert die Fläche unter der Kurve.
 
     Parameter:
-        ax (matplotlib.axes.Axes): Achse, in die geplottet wird
+        ax (matplotlib.axes.Axes): Ziel-Achse, in die gezeichnet wird
         a (float): Linke Intervallgrenze
         b (float): Rechte Intervallgrenze
-        f (callable): Funktion f(x), die geplottet werden soll
+        f (callable): Funktion, die geplottet werden soll (typisch: Betragsfunktion B(x))
 
     Rückgabe:
-        keine
+        None
     """
     # x-Werte für Plot
     xp = np.linspace(a, b, 10000)
     # Funktionswerte einmal berechnen
-    y1 = f(xp)
+    y1 = _eval_y(f, xp)
     # Plotten der Funktion
     ax.plot(xp, y1, color="red", label="$B(x)$")  # Plot Betragsfunktion
-    ax.fill_between(xp, y1, alpha=0.25, color="green",
+    ax.fill_between(xp, y1, alpha=0.25, color="blue",
                     label="Fläche unter $B(x)$")  # Fläche unter B(x)
     # Bearbeiten Koordinatensystem
     ax.set_xlabel("x")
@@ -64,49 +62,55 @@ def plot_betrag(ax, a, b, f):
     ax.legend()
 
 
-def plot_riemannsumme(ax, a, b, nr, f, mode="u"):
+def plot_riemannsumme(ax, a, b, nr, f, mode="u", k=2000):
     """
-    Plottet die Funktion f auf [a,b] in ein gegebenes Axes-Objekt und visualisiert Riemann-Rechtecke (Unter- oder Obersumme).
+    Plottet die Funktion f auf [a,b] und zeichnet dazu Riemann-Rechtecke (Unter- oder Obersumme).
 
     Parameter:
-        ax (matplotlib.axes.Axes): Achse, in die geplottet wird
+        ax (matplotlib.axes.Axes): Ziel-Achse, in die gezeichnet wird
         a (float): Linke Intervallgrenze
         b (float): Rechte Intervallgrenze
-        nr (int): Anzahl der Teilintervalle der Zerlegung
-        f (callable): Funktion f(x), die geplottet und angenähert wird
-        mode (str): "u" für Untersumme, "o" für Obersumme
+        nr (int): Anzahl der Teilintervalle (Riemann-Rechtecke)
+        f (callable): Funktion, die geplottet und über Rechtecke angenähert wird
+        mode (str): "u" für Untersumme (Minimum je Teilintervall), "o" für Obersumme (Maximum je Teilintervall)
+        k (int): Anzahl Abtastpunkte pro Teilintervall zur Min/Max-Bestimmung
 
     Rückgabe:
-        keine
+        None
     """
     """
     Plottet die Betragsfunktion B(x) und Riemann-Rechtecke.
     mode:
-      "u" -> Untersumme (min an Intervallenden)
-      "o" -> Obersumme  (max an Intervallenden)
+      "u" -> Untersumme (min auf dem Teilintervall)
+      "o" -> Obersumme  (max auf dem Teilintervall)
+
+    k = Anzahl Abtastpunkte pro Teilintervall (größer -> genauer, langsamer)
     """
     # Kurve fein plotten
     xp = np.linspace(a, b, 10000)
-    yp = f(xp)
+    yp = _eval_y(f, xp)
     ax.plot(xp, yp, color="red", label="$B(x)$")
     # Stützstellen der Zerlegung
-    dx = (b - a) / nr  # Feinheit
+    dx = (b - a) / nr
     xre = np.linspace(a, b, nr + 1)
-    # Funktionswerte an Stützstellen nur einmal berechnen
-    yre = f(xre)
-    # Rechteckhöhen pro Intervall aus Endpunkten bestimmen
-    y_left = yre[:-1]
-    y_right = yre[1:]
+    # Rechteckhöhen: wirkliches Min/Max pro Teilintervall über Abtastung
+    heights = np.zeros(nr)
+    for i in range(nr):
+        xseg = np.linspace(xre[i], xre[i + 1], k)  # Abtastpunkte im Teilintervall
+        yseg = _eval_y(f, xseg)                           # Funktionswerte dort
+        if mode == "u":
+            heights[i] = float(np.min(yseg))       # Minimum im Teilintervall
+        elif mode == "o":
+            heights[i] = float(np.max(yseg))       # Maximum im Teilintervall
+        else:
+            raise ValueError("mode muss 'u' oder 'o' sein")
+    # Farben/Labels
     if mode == "u":
-        heights = np.minimum(y_left, y_right)
         label_rect = "Untersumme"
-        color_rect = "blue"
-    elif mode == "o":
-        heights = np.maximum(y_left, y_right)
-        label_rect = "Obersumme"
         color_rect = "green"
     else:
-        raise ValueError("mode muss 'u' oder 'o' sein")
+        label_rect = "Obersumme"
+        color_rect = "blue"
     # Rechtecke zeichnen (linke Kante bei xre[:-1])
     ax.bar(
         xre[:-1],
@@ -123,30 +127,34 @@ def plot_riemannsumme(ax, a, b, nr, f, mode="u"):
     ax.set_xlabel("x")
     ax.set_ylabel("y")
     ax.grid(True)
-    ax.legend()
+    if nr >= 500:
+        ax.legend(loc="upper left")
+    else:
+        ax.legend(loc="best")
+
 
 
 def plot_trapezregel(ax, a, b, nt, f):
     """
-    Plottet die Funktion f auf [a,b] in ein gegebenes Axes-Objekt und visualisiert die Trapeze der Trapezregel mit nt Teilintervallen.
+    Plottet die Funktion f auf [a,b] und visualisiert die Trapezregel durch gefüllte Trapezflächen.
 
     Parameter:
-        ax (matplotlib.axes.Axes): Achse, in die geplottet wird
+        ax (matplotlib.axes.Axes): Ziel-Achse, in die gezeichnet wird
         a (float): Linke Intervallgrenze
         b (float): Rechte Intervallgrenze
-        nt (int): Anzahl der Teilintervalle der Zerlegung
-        f (callable): Funktion f(x), die geplottet und durch Trapeze angenähert wird
+        nt (int): Anzahl der Teilintervalle für die Trapezregel
+        f (callable): Funktion, die geplottet und per Trapezen angenähert wird
 
     Rückgabe:
-        keine
+        None
     """
     # Kurve fein plotten
     xp = np.linspace(a, b, 10000)
-    yp = f(xp)
+    yp = _eval_y(f, xp)
     ax.plot(xp, yp, color="red", label="$B(x)$")
     # Plot der Trapeze
     xt = np.linspace(a, b, nt + 1)  # Stützstellen
-    yt = f(xt)
+    yt = _eval_y(f, xt)
     # Plotten von nt Trapezen
     for i in range(nt):
         # Label soll nur einmal erscheinen
@@ -167,26 +175,29 @@ def plot_trapezregel(ax, a, b, nt, f):
     ax.set_xlabel("x")
     ax.set_ylabel("y")
     ax.grid(True)
-    ax.legend()
+    if nt >= 500:
+        ax.legend(loc="upper left")
+    else:
+        ax.legend(loc="best")
 
 
 def plot_simpson(ax, a, b, ns, f):
     """
-    Plottet die Funktion f auf [a,b] in ein gegebenes Axes-Objekt und visualisiert die Simpson-Interpolation (Parabeln) für ns Teilintervalle.
+    Plottet die Funktion f auf [a,b] und visualisiert die Simpsonregel über Interpolationsparabeln.
 
     Parameter:
-        ax (matplotlib.axes.Axes): Achse, in die geplottet wird
+        ax (matplotlib.axes.Axes): Ziel-Achse, in die gezeichnet wird
         a (float): Linke Intervallgrenze
         b (float): Rechte Intervallgrenze
-        ns (int): Anzahl der Teilintervalle der Zerlegung (muss gerade sein)
-        f (callable): Funktion f(x), die geplottet und durch Parabeln angenähert wird
+        ns (int): Anzahl der Teilintervalle (muss gerade sein, da Simpson über Zweierintervalle arbeitet)
+        f (callable): Funktion, die geplottet und per Simpson-Interpolation angenähert wird
 
     Rückgabe:
-        keine
+        None
     """
     # Kurve fein plotten
     xp = np.linspace(a, b, 10000)
-    yp = f(xp)
+    yp = _eval_y(f, xp)
     ax.plot(xp, yp, color="red", label="$B(x)$")
 
     # Plot Interpolationspolynome
@@ -194,22 +205,23 @@ def plot_simpson(ax, a, b, ns, f):
     h = (b - a) / ns
     # Stützstellen
     xp = np.linspace(a, b, ns + 1)
+    ys = _eval_y(f, xp)
     # Interpolationsparabel
     def p(x, index, h, xp):
         return (1 / (h ** 2)) * (
-            0.5 * f(xp[index]) * (x - xp[index + 1]) * (x - xp[index + 2])
-            - f(xp[index + 1]) * (x - xp[index]) * (x - xp[index + 2])
-            + 0.5 * f(xp[index + 2]) * (x - xp[index]) * (x - xp[index + 1])
+            0.5 * ys[index] * (x - xp[index + 1]) * (x - xp[index + 2])
+            - ys[index+1] * (x - xp[index]) * (x - xp[index + 2])
+            + 0.5 * ys[index+2] * (x - xp[index]) * (x - xp[index + 1])
         )
     # Plot Parabeln in Zweierintervallen
     for i in range(0, ns, 2):
         xp1 = np.linspace(xp[i], xp[i + 2], 2000)
         yint = p(xp1, i, h, xp)
         if i == 0:
-            ax.plot(xp1, yint, color="blue", label="Interpolationsparabeln")
+            ax.plot(xp1, yint, color="green", label="Interpolationsparabeln")
             ax.fill_between(
                 xp1, 0, yint,
-                color="green",
+                color="blue",
                 alpha=0.25,
                 edgecolor="black",
                 linewidth=2,
@@ -217,10 +229,10 @@ def plot_simpson(ax, a, b, ns, f):
                 label="Fläche unter Parabeln"
             )
         else:
-            ax.plot(xp1, yint, color="blue")
+            ax.plot(xp1, yint, color="green")
             ax.fill_between(
                 xp1, 0, yint,
-                color="green",
+                color="blue",
                 alpha=0.25,
                 edgecolor="black",
                 linewidth=2,
@@ -230,26 +242,30 @@ def plot_simpson(ax, a, b, ns, f):
     ax.set_xlabel("x")
     ax.set_ylabel("y")
     ax.grid(True)
-    ax.legend()
+    if ns>=500:
+        ax.legend(loc="upper left")
+    else:
+        ax.legend(loc="best")
 
 
-from core.functions import randomsmonte
-
-def plot_monte(ax, a, b, N, h, hs, w="h"):
+def plot_monte(ax, a, b, N,f,kma,xz,yz,T,w="h"):
     """
-    Visualisiert die Monte Carlo Zufallspunkte und die zugehörige Funktion (h oder hs) in ein gegebenes Axes-Objekt auf dem Intervall [a,b].
+    Plottet die Funktion f auf [a,b] und zeigt dazu die Monte-Carlo-Zufallspunkte (mit Trefferanzahl).
 
     Parameter:
-        ax (matplotlib.axes.Axes): Achse, in die geplottet wird
+        ax (matplotlib.axes.Axes): Ziel-Achse, in die gezeichnet wird
         a (float): Linke Intervallgrenze
         b (float): Rechte Intervallgrenze
-        N (int): Anzahl der Zufallspunkte
-        h (callable): Funktion h(x)
-        hs (callable): Funktion hs(x)
-        w (str): Auswahl der Funktion, "h" oder "hs"
+        N (int): Anzahl der Monte-Carlo-Zufallspunkte
+        f (callable): Funktion, zu der Monte Carlo visualisiert wird (B(x) oder B_s(x))
+        kma (int): Parameter/Steuergröße aus dem Programmkontext (hier nicht direkt verwendet)
+        xz (array-like): x-Koordinaten der Zufallspunkte
+        yz (array-like): y-Koordinaten der Zufallspunkte
+        T (int): Trefferanzahl (Punkte unter der Kurve)
+        w (str): "h" für B(x), "hs" für B_s(x) (nur für Labeling)
 
     Rückgabe:
-        keine
+        None
     """
     """
     w = "h"  -> Monte Carlo für h
@@ -257,32 +273,21 @@ def plot_monte(ax, a, b, N, h, hs, w="h"):
     """
     # Feiner Plot der Kurve
     xp = np.linspace(a, b, 10000)
-
-    # Zufallspunkte erzeugen
-    xz, yz1, yz2, y1max, y2max = randomsmonte(a, b, N, h, hs)
-    # Welche Funktion soll geplottet werden?
-    if w == "h":
-        ax.plot(xp, h(xp), color="red", label="$B(x)$")
-        ax.plot(
-            xz, yz1,
-            'o',
-            color="blue",
-            markersize=3,
-            label=f"Zufallspunkte (N={N})"
-        )
-    elif w == "hs":
-        ax.plot(xp, hs(xp), color="red", label="$B(x)$")
-        ax.plot(
-            xz, yz2,
-            'o',
-            color="blue",
-            markersize=3,
-            label=f"Zufallspunkte (N={N})"
-        )
+    # Zufallspunkte und Funktion Plotten
+    if w=="hs":
+        ax.plot(xp, _eval_y(f,xp), color="red", label="$B_s(x)$")
     else:
-        raise ValueError("w muss 'h' oder 'hs' sein")
+        ax.plot(xp, _eval_y(f,xp), color="red", label="$B(x)$")
+    ax.plot(xz, yz,
+            'o',
+            color="blue",
+            markersize=3,
+            label=f"Zufallspunkte mit {T} Treffern (N={N})")
     # Bearbeiten Koordinatensystem
     ax.set_xlabel("x")
     ax.set_ylabel("y")
     ax.grid(True)
-    ax.legend()
+    if N >= 500:
+        ax.legend(loc="upper left")
+    else:
+        ax.legend(loc="best")
