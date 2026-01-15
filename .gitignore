@@ -6,4 +6,9 @@ build/
 .idea/
 *.iml
 .DS_Store
-
+# PyCharm / IntelliJ spezifisch
+.idea/Git.BeLL.iml
+.idea/modules.xml
+.idea/profiles_settings.xml
+.idea/vcs.xml
+.idea/workspace.xml
